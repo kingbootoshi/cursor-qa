@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { config, isAgentMode, isSandboxMode, sandboxModes, agentModes, type AgentMode, type SandboxMode } from "./config.ts";
 import { estimateTokens, loadCodebaseMap } from "./files.ts";
 import { buildBrowserHarnessPrelude, defaultBrowserHarnessPluginDirs } from "./browser-harness.ts";
+import { checkCursorAgent, runCommand } from "./preflight.ts";
 import {
   cleanupOldJobs,
   deleteJob,
@@ -28,6 +29,7 @@ interface Options {
   model: string;
   mode: AgentMode;
   sandbox: SandboxMode;
+  sandboxExplicit: boolean;
   cwd: string;
   includeMap: boolean;
   dryRun: boolean;
@@ -63,7 +65,7 @@ Usage:
 Defaults:
   model: ${config.defaultModel}
   mode: ${config.defaultMode}
-  sandbox: ${config.defaultSandbox}
+  sandbox: ${config.defaultSandbox} (browser-harness QA auto-uses disabled)
   browser-harness: enabled
 
 Options:
@@ -92,6 +94,7 @@ function parseArgs(args: string[]): { command: string; positional: string[]; opt
     model: config.defaultModel,
     mode: config.defaultMode,
     sandbox: config.defaultSandbox,
+    sandboxExplicit: false,
     cwd: process.cwd(),
     includeMap: false,
     dryRun: false,
@@ -128,6 +131,7 @@ function parseArgs(args: string[]): { command: string; positional: string[]; opt
       const mode = next();
       if (!isSandboxMode(mode)) fail(`invalid sandbox: ${mode}`);
       options.sandbox = mode;
+      options.sandboxExplicit = true;
     } else if (arg === "--force" || arg === "--yolo" || arg === "-f") {
       options.force = true;
     } else if (arg === "--no-trust") {
@@ -208,6 +212,7 @@ async function main() {
 async function startCommand(positional: string[], options: Options): Promise<number> {
   if (positional.length === 0) fail("no prompt provided");
   if (!isTmuxAvailable()) fail("tmux is required but was not found");
+  normalizeBrowserHarnessSandbox(options);
   let prompt = positional.join(" ");
   if (options.includeMap) {
     const map = loadCodebaseMap(options.cwd);
@@ -232,6 +237,7 @@ async function startCommand(positional: string[], options: Options): Promise<num
     console.log(prompt.slice(0, 5000));
     return 0;
   }
+  preflightStart(options);
   const startOptions: StartJobOptions = {
     prompt,
     cwd: options.cwd,
@@ -396,21 +402,45 @@ function cleanCommand(): number {
 function healthCommand(): number {
   const tmux = spawnSync("tmux", ["-V"], { encoding: "utf8", timeout: 5_000 });
   console.log(tmux.status === 0 ? `tmux: ${tmux.stdout.trim()}` : "tmux: missing");
-  const cursor = spawnSync(config.agentPath, ["--version"], { encoding: "utf8", timeout: 5_000 });
-  console.log(cursor.status === 0 ? `agent: ${cursor.stdout.trim()}` : "agent: missing");
-  const status = spawnSync(config.agentPath, ["status"], { encoding: "utf8", timeout: 10_000 });
-  if (status.stdout.trim()) console.log(`auth: ${status.stdout.trim()}`);
-  else if (status.stderr.trim()) console.log(`auth: ${status.stderr.trim()}`);
-  const models = spawnSync(config.agentPath, ["models"], { encoding: "utf8", timeout: 10_000 });
-  const hasModel = models.stdout.includes(config.defaultModel);
-  console.log(`model ${config.defaultModel}: ${hasModel ? "OK" : "missing"}`);
+  console.log(`agent path: ${config.agentPath}`);
+  const cursor = runCommand(config.agentPath, ["--version"], 5_000);
+  console.log(cursor.status === 0 ? `agent: ${cursor.stdout}` : `agent: missing (${cursor.combined || "agent --version failed"})`);
+  const preflight = checkCursorAgent(config.agentPath, config.defaultModel);
+  if (preflight.auth.combined) console.log(`auth: ${preflight.auth.combined}`);
+  if (preflight.sandboxBlocked) {
+    console.log("auth guidance: blocked by macOS Keychain sandbox; rerun cursor-agent health as an approved/escalated Codex command.");
+    console.log(`model ${config.defaultModel}: not checked because auth is sandbox-blocked`);
+  } else {
+    console.log(`model ${config.defaultModel}: ${preflight.hasModel ? "OK" : "missing"}`);
+  }
   console.log(`browser-harness skill: ${existsSync(config.browserHarnessSkillPath) ? "OK" : "missing"}`);
   console.log(`browser-harness canonical doc: ${existsSync(config.browserHarnessCanonicalSkillPath) ? "OK" : "missing"}`);
   console.log(`browser-harness helpers: ${existsSync(config.browserHarnessHelpersPath) ? "OK" : "missing"}`);
   console.log(`Cursor browser-harness plugin: ${existsSync(config.browserHarnessPluginDir) ? "OK" : "missing"}`);
   const harness = spawnSync("which", ["browser-harness"], { encoding: "utf8", timeout: 5_000 });
   console.log(harness.status === 0 ? `browser-harness: ${harness.stdout.trim()}` : "browser-harness: missing");
-  return tmux.status === 0 && cursor.status === 0 && status.status === 0 && hasModel ? 0 : 1;
+  return tmux.status === 0 && preflight.ok ? 0 : 1;
+}
+
+function normalizeBrowserHarnessSandbox(options: Options): void {
+  if (!options.browserHarness) return;
+  if (options.sandboxExplicit && options.sandbox === "enabled" && !config.allowBrowserHarnessSandbox) {
+    fail(
+      [
+        "browser-harness QA cannot run with Cursor Agent sandbox enabled.",
+        "The harness needs localhost CDP access, and sandboxed Cursor tool calls can mis-detect Chrome and hang or fail.",
+        "Use --sandbox disabled, omit --sandbox so cursor-agent can choose the QA default, or pass --no-browser-harness for non-browser work.",
+        "Set CURSOR_AGENT_ALLOW_BROWSER_HARNESS_SANDBOX=1 only when intentionally testing sandbox failure behavior."
+      ].join("\n")
+    );
+  }
+  if (!options.sandboxExplicit) options.sandbox = "disabled";
+}
+
+function preflightStart(options: Options): void {
+  const preflight = checkCursorAgent(config.agentPath, options.model);
+  if (preflight.ok) return;
+  fail(preflight.message ?? "Cursor Agent preflight failed");
 }
 
 function requiredJobId(positional: string[]): string {

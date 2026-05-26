@@ -34,6 +34,9 @@ Both commands run the same CLI. `cursor-agent` is the orchestration command used
 
 ## Quick Start
 
+When running from Codex, approve/escalate `cursor-agent` commands. Cursor needs
+Keychain access for auth, and browser-harness QA needs localhost CDP access.
+
 ```bash
 cursor-agent health
 cursor-agent start "Goal: QA http://localhost:3000 with browser-harness.
@@ -47,6 +50,11 @@ Stop when: You return one PASS or FAIL report." --dir . --force
 cursor-agent await-turn <jobId>
 cursor-agent capture <jobId> 220 --clean
 ```
+
+For browser-harness jobs, `cursor-agent` automatically runs Cursor Agent with
+`--sandbox disabled` unless you set `--sandbox` explicitly. This mirrors the
+browser-harness requirement: sandboxed tool calls can block localhost CDP and
+turn a healthy Chrome into a silent or misleading failure.
 
 ## Skill
 

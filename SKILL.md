@@ -29,6 +29,10 @@ cursor-agent capture <jobId> 220 --clean
 cursor-agent status <jobId>
 ```
 
+When Codex runs these commands, run them as approved/escalated shell commands. Cursor Agent reads macOS Keychain auth, and browser-harness needs localhost CDP access. A sandboxed Codex command can make `agent status` fail with `SecItemCopyMatching` and can make browser-harness mis-detect Chrome.
+
+For browser-harness jobs, omit `--sandbox` or pass `--sandbox disabled`. `cursor-agent` automatically chooses Cursor Agent sandbox disabled for browser-harness QA when no explicit sandbox is provided. If a caller passes `--sandbox enabled` with browser-harness, the wrapper fails fast with a clear error instead of launching a silent QA job.
+
 Retest after a fix:
 
 ```bash
@@ -128,4 +132,4 @@ Run this when Cursor, tmux, model access, or browser-harness setup is suspect:
 cursor-agent health
 ```
 
-The health check verifies tmux, Cursor auth, `composer-2.5-fast`, browser-harness files, the Cursor plugin, and the `browser-harness` executable.
+The health check verifies tmux, Cursor auth, `composer-2.5-fast`, browser-harness files, the Cursor plugin, and the `browser-harness` executable. If health reports a Keychain sandbox error, rerun the same command as an approved/escalated Codex shell command before dispatching QA.

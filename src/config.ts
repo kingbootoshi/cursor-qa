@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveExecutable } from "./preflight.ts";
 
 export const sandboxModes = ["enabled", "disabled"] as const;
 export type SandboxMode = (typeof sandboxModes)[number];
@@ -22,7 +23,8 @@ export const config = {
   defaultTimeoutMinutes: Number(process.env.CURSOR_AGENT_TIMEOUT_MINUTES ?? "45"),
   jobsListLimit: Number(process.env.CURSOR_AGENT_JOBS_LIMIT ?? "20"),
   tmuxPrefix: process.env.CURSOR_AGENT_TMUX_PREFIX ?? "cursor-agent",
-  agentPath: process.env.CURSOR_AGENT_AGENT_PATH ?? "agent",
+  agentPath: resolveExecutable(process.env.CURSOR_AGENT_AGENT_PATH ?? "agent"),
+  allowBrowserHarnessSandbox: process.env.CURSOR_AGENT_ALLOW_BROWSER_HARNESS_SANDBOX === "1",
   browserHarnessSkillPath:
     process.env.CURSOR_AGENT_BROWSER_HARNESS_SKILL ??
     join(homedir(), ".codex", "skills", "browser-harness", "SKILL.md"),
