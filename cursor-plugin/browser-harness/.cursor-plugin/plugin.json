@@ -1,0 +1,16 @@
+{
+  "name": "browser-harness",
+  "version": "1.0.0",
+  "description": "Direct Chrome Canary browser control through the local browser-harness CLI for fast E2E testing, scraping, and UI automation.",
+  "author": {
+    "name": "Saint"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "browser",
+    "e2e",
+    "cdp",
+    "automation",
+    "testing"
+  ]
+}

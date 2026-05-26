@@ -1,0 +1,25 @@
+{
+  "name": "cursor-qa",
+  "version": "0.1.0",
+  "description": "Codex skill and tmux-backed Cursor Agent QA wrapper for Composer 2.5 Fast",
+  "type": "module",
+  "bin": {
+    "cursor-agent": "bin/cursor-agent",
+    "cursor-qa": "bin/cursor-qa"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "start": "bun run src/cli.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "1.3.13",
+    "@types/node": "24.10.0",
+    "typescript": "5.8.3"
+  },
+  "overrides": {
+    "@types/node": "24.10.0",
+    "undici-types": "7.16.0"
+  }
+}

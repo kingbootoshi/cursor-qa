@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cursor QA"
+  short_description: "Delegate browser QA to Cursor Composer"
+  default_prompt: "Use $cursor-qa to write a focused QA brief and delegate browser-harness testing to Cursor Composer 2.5 Fast."
